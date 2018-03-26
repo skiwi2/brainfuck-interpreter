@@ -48,6 +48,7 @@ step previousProgram currentProgram memory pointer = do
                 Right decrease  -> do
                     let newStart = (length previousProgram) - decrease
                     step (take newStart previousProgram) ((drop newStart previousProgram) ++ currentProgram) memory pointer
+        _   -> step (previousProgram ++ [instruction]) nextProgram memory pointer
 
 findMatchingLoopClose :: [Char] -> Int -> Int -> Either String Int
 findMatchingLoopClose [] _ _ = Left "findMatchingLoopClose: No matching ] found"
