@@ -2,6 +2,7 @@ module Lib
     ( interpret
     ) where
 
+import Control.Monad
 import Data.Char
 import Data.List
 
@@ -27,8 +28,8 @@ step previousProgram currentProgram memory pointer = do
         '<' -> if pointer == 0
             then step (previousProgram ++ [instruction]) nextProgram ([0] ++ memory) 0
             else step (previousProgram ++ [instruction]) nextProgram memory (pointer - 1)
-        '+' -> step (previousProgram ++ [instruction]) nextProgram (previousMemory ++ [currentMemoryCell + 1] ++ nextMemory) pointer
-        '-' -> step (previousProgram ++ [instruction]) nextProgram (previousMemory ++ [currentMemoryCell - 1] ++ nextMemory) pointer
+        '+' -> step (previousProgram ++ [instruction]) nextProgram (previousMemory ++ [wrap $ currentMemoryCell + 1] ++ nextMemory) pointer
+        '-' -> step (previousProgram ++ [instruction]) nextProgram (previousMemory ++ [wrap $ currentMemoryCell - 1] ++ nextMemory) pointer
         '.' -> do
             putChar . chr $ currentMemoryCell
             step (previousProgram ++ [instruction]) nextProgram memory pointer
@@ -49,6 +50,12 @@ step previousProgram currentProgram memory pointer = do
                     let newStart = (length previousProgram) - decrease
                     step (take newStart previousProgram) ((drop newStart previousProgram) ++ currentProgram) memory pointer
         _   -> step (previousProgram ++ [instruction]) nextProgram memory pointer
+
+wrap :: Int -> Int
+wrap input = case input of
+    -1  -> 255
+    256 -> 0
+    _   -> input
 
 findMatchingLoopClose :: [Char] -> Int -> Int -> Either String Int
 findMatchingLoopClose [] _ _ = Left "findMatchingLoopClose: No matching ] found"
