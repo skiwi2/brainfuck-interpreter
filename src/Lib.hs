@@ -2,7 +2,6 @@ module Lib
     ( interpret
     ) where
 
-import Control.Monad
 import Data.Char
 import Data.List
 
@@ -19,8 +18,7 @@ step _ [] memory _ = return . Right $ memory
 step previousProgram currentProgram memory pointer = do
     let Just (instruction, nextProgram) = uncons currentProgram
     let (previousMemory, currentMemory) = splitAt pointer memory
-    let currentMemoryCell = head currentMemory
-    let nextMemory = tail currentMemory
+    let Just (currentMemoryCell, nextMemory) = uncons currentMemory
     case instruction of
         '>' -> if pointer == length memory - 1
             then step (previousProgram ++ [instruction]) nextProgram (memory ++ [0]) (length memory)
