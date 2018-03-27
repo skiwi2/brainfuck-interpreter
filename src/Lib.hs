@@ -48,10 +48,7 @@ step previousProgram currentProgram memory pointer = do
         _   -> step (previousProgram ++ [instruction]) nextProgram memory pointer
 
 wrap :: Int -> Int
-wrap input = case input of
-    -1  -> 255
-    256 -> 0
-    _   -> input
+wrap input = mod input 256
 
 findMatchingLoopClose :: [Char] -> Int -> Int -> Either String Int
 findMatchingLoopClose [] _ _ = Left "findMatchingLoopClose: No matching ] found"
