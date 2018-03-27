@@ -6,13 +6,11 @@ import Data.Char
 import Data.List
 
 interpret :: [Char] -> IO (Either String [Int])
-interpret program = do
-    step [] program [0] 0
+interpret program = step [] program [0] 0
 
 -- TODO: memory should be of type Byte
 -- TODO: error handling
 -- TODO: introduce types
--- TODO: fix matching brackets bug
 step :: [Char] -> [Char] -> [Int] -> Int -> IO (Either String [Int])
 step _ [] memory _ = return . Right $ memory
 step previousProgram currentProgram memory pointer = do
@@ -38,7 +36,7 @@ step previousProgram currentProgram memory pointer = do
         '[' -> case currentMemoryCell of
             0   -> case findMatchingLoopClose nextProgram 0 0 of
                 Left err            -> return . Left $ err
-                Right advancement   -> step (previousProgram ++ [instruction] ++ (take advancement currentProgram)) (drop (advancement + 1) currentProgram) memory pointer
+                Right advancement   -> step (previousProgram ++ [instruction] ++ (take advancement nextProgram)) (drop advancement nextProgram) memory pointer
             _   -> step (previousProgram ++ [instruction]) nextProgram memory pointer
         ']' -> case currentMemoryCell of
             0   -> step (previousProgram ++ [instruction]) nextProgram memory pointer
