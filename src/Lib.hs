@@ -4,12 +4,12 @@ module Lib
 
 import Data.Char
 import Data.List
+import System.IO
 
 interpret :: [Char] -> IO (Either String [Int])
 interpret program = step [] program [0] 0
 
 -- TODO: memory should be of type Byte
--- TODO: error handling
 -- TODO: introduce types
 step :: [Char] -> [Char] -> [Int] -> Int -> IO (Either String [Int])
 step _ [] memory _ = return . Right $ memory
@@ -28,6 +28,7 @@ step previousProgram currentProgram memory pointer = do
         '-' -> step (previousProgram ++ [instruction]) nextProgram (previousMemory ++ [wrap $ currentMemoryCell - 1] ++ nextMemory) pointer
         '.' -> do
             putChar . chr $ currentMemoryCell
+            hFlush stdout
             step (previousProgram ++ [instruction]) nextProgram memory pointer
         ',' -> do
             newCurrentChar <- getChar
