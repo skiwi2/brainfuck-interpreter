@@ -3,71 +3,109 @@ module Lib
     ) where
 
 import Data.Char
-import Data.List
+import Data.Maybe
 import System.IO
 
-interpret :: [Char] -> IO (Either String [Int])
-interpret program = step [] program [0] 0
+data BFInstruction = MemoryRight | MemoryLeft | Increment | Decrement | Output | Input | LoopBegin | LoopEnd | Stop deriving (Enum, Eq, Show)
+data BFProgram = BFProgram [BFInstruction] BFInstruction [BFInstruction] deriving Show
 
--- TODO: memory should be of type Byte
--- TODO: introduce types
-step :: [Char] -> [Char] -> [Int] -> Int -> IO (Either String [Int])
-step _ [] memory _ = return . Right $ memory
-step previousProgram currentProgram memory pointer = do
-    let Just (instruction, nextProgram) = uncons currentProgram
-    let (previousMemory, currentMemory) = splitAt pointer memory
-    let Just (currentMemoryCell, nextMemory) = uncons currentMemory
-    case instruction of
-        '>' -> if pointer == length memory - 1
-            then step (previousProgram ++ [instruction]) nextProgram (memory ++ [0]) (length memory)
-            else step (previousProgram ++ [instruction]) nextProgram memory (pointer + 1)
-        '<' -> if pointer == 0
-            then step (previousProgram ++ [instruction]) nextProgram ([0] ++ memory) 0
-            else step (previousProgram ++ [instruction]) nextProgram memory (pointer - 1)
-        '+' -> step (previousProgram ++ [instruction]) nextProgram (previousMemory ++ [wrap $ currentMemoryCell + 1] ++ nextMemory) pointer
-        '-' -> step (previousProgram ++ [instruction]) nextProgram (previousMemory ++ [wrap $ currentMemoryCell - 1] ++ nextMemory) pointer
-        '.' -> do
-            putChar . chr $ currentMemoryCell
-            hFlush stdout
-            step (previousProgram ++ [instruction]) nextProgram memory pointer
-        ',' -> do
-            newCurrentChar <- getChar
-            let newCurrent = ord newCurrentChar
-            step (previousProgram ++ [instruction]) nextProgram (previousMemory ++ [newCurrent] ++ nextMemory) pointer
-        '[' -> case currentMemoryCell of
-            0   -> case findMatchingLoopClose nextProgram 0 0 of
-                Left err            -> return . Left $ err
-                Right advancement   -> step (previousProgram ++ [instruction] ++ (take advancement nextProgram)) (drop advancement nextProgram) memory pointer
-            _   -> step (previousProgram ++ [instruction]) nextProgram memory pointer
-        ']' -> case currentMemoryCell of
-            0   -> step (previousProgram ++ [instruction]) nextProgram memory pointer
-            _   -> case findMatchingLoopOpen previousProgram 0 0 of
-                Left err        -> return . Left $ err
-                Right decrease  -> do
-                    let newStart = (length previousProgram) - decrease
-                    step (take newStart previousProgram) ((drop newStart previousProgram) ++ currentProgram) memory pointer
-        _   -> step (previousProgram ++ [instruction]) nextProgram memory pointer
+newtype BFMemoryCell = BFMemoryCell Int deriving Show
+data BFMemory = BFMemory [BFMemoryCell] BFMemoryCell [BFMemoryCell] deriving Show
+
+startProgram :: [BFInstruction] -> BFProgram
+startProgram instructions = BFProgram [] (head instructions) (tail instructions ++ [Stop])
+
+advance :: BFProgram -> BFProgram
+advance (BFProgram past current next) = BFProgram (past ++ [current]) (head next) (tail next)
+
+decrease :: BFProgram -> BFProgram
+decrease (BFProgram past current next) = BFProgram (init past) (last past) (current:next)
+
+jumpAfterMatchingLoopEnd :: BFProgram -> BFProgram
+jumpAfterMatchingLoopEnd program = jumpAfterMatchingLoopEnd' 0 (advance program)
+
+jumpAfterMatchingLoopEnd' :: Int -> BFProgram -> BFProgram
+jumpAfterMatchingLoopEnd' 0 program@(BFProgram _ LoopEnd _) = advance program
+jumpAfterMatchingLoopEnd' nesting program@(BFProgram _ instruction _) = case instruction of
+    LoopEnd     -> jumpAfterMatchingLoopEnd' (nesting - 1) (advance program)
+    LoopBegin   -> jumpAfterMatchingLoopEnd' (nesting + 1) (advance program)
+    _           -> jumpAfterMatchingLoopEnd' nesting (advance program)
+
+jumpToMatchingLoopBegin :: BFProgram -> BFProgram
+jumpToMatchingLoopBegin program = jumpToMatchingLoopBegin' 0 (decrease program)
+
+jumpToMatchingLoopBegin' :: Int -> BFProgram -> BFProgram
+jumpToMatchingLoopBegin' 0 program@(BFProgram _ LoopBegin _) = program
+jumpToMatchingLoopBegin' nesting program@(BFProgram _ instruction _) = case instruction of
+    LoopBegin   -> jumpToMatchingLoopBegin' (nesting - 1) (decrease program)
+    LoopEnd     -> jumpToMatchingLoopBegin' (nesting + 1) (decrease program)
+    _           -> jumpToMatchingLoopBegin' nesting (decrease program)
+
+makeCell :: Int -> BFMemoryCell
+makeCell = BFMemoryCell . wrap
+
+incrementCell :: BFMemoryCell -> BFMemoryCell
+incrementCell = makeCell . (+1) . getCell
+
+decrementCell :: BFMemoryCell -> BFMemoryCell
+decrementCell = makeCell . subtract 1 . getCell
+
+getCell :: BFMemoryCell -> Int
+getCell (BFMemoryCell value) = value
 
 wrap :: Int -> Int
 wrap input = mod input 256
 
-findMatchingLoopClose :: [Char] -> Int -> Int -> Either String Int
-findMatchingLoopClose [] _ _ = Left "findMatchingLoopClose: No matching ] found"
-findMatchingLoopClose (instruction:remainingProgram) index nestingCounter = case instruction of
-    '[' -> findMatchingLoopClose remainingProgram (index + 1) (nestingCounter + 1)
-    ']' -> if nestingCounter == 0
-        then Right index
-        else findMatchingLoopClose remainingProgram (index + 1) (nestingCounter - 1)
-    _   -> findMatchingLoopClose remainingProgram (index + 1) nestingCounter
+moveMemoryRight :: BFMemory -> BFMemory
+moveMemoryRight (BFMemory previous current []) = BFMemory (previous ++ [current]) (makeCell 0) []
+moveMemoryRight (BFMemory previous current next) = BFMemory (previous ++ [current]) (head next) (tail next)
 
-findMatchingLoopOpen :: [Char] -> Int -> Int -> Either String Int
-findMatchingLoopOpen = findMatchingLoopOpen' . reverse
+moveMemoryLeft :: BFMemory -> BFMemory
+moveMemoryLeft (BFMemory [] current next) = BFMemory [] (makeCell 0) (current:next)
+moveMemoryLeft (BFMemory previous current next) = BFMemory (init previous) (last previous) (current:next)
 
-findMatchingLoopOpen' :: [Char] -> Int -> Int -> Either String Int
-findMatchingLoopOpen' [] _ _ = Left "findMatchingLoopOpen: No matching [ found"
-findMatchingLoopOpen' (instruction:remainingProgram) index nestingCounter = case instruction of
-    ']' -> findMatchingLoopOpen' remainingProgram (index + 1) (nestingCounter + 1)
-    '[' -> if nestingCounter == 0
-        then Right index
-        else findMatchingLoopOpen' remainingProgram (index + 1) (nestingCounter - 1)
-    _   -> findMatchingLoopOpen' remainingProgram (index + 1) nestingCounter
+onCurrentCell :: (BFMemoryCell -> BFMemoryCell) -> BFMemory -> BFMemory
+onCurrentCell func (BFMemory previous current next) = BFMemory previous (func current) next
+
+setCurrentCell :: BFMemoryCell -> BFMemory -> BFMemory
+setCurrentCell cell (BFMemory previous _ next) = BFMemory previous cell next
+
+toInstructions :: String -> [BFInstruction]
+toInstructions = mapMaybe toInstruction
+
+toInstruction :: Char -> Maybe BFInstruction
+toInstruction instruction = case instruction of
+    '>' -> Just MemoryRight
+    '<' -> Just MemoryLeft
+    '+' -> Just Increment
+    '-' -> Just Decrement
+    '.' -> Just Output
+    ',' -> Just Input
+    '[' -> Just LoopBegin
+    ']' -> Just LoopEnd
+    _   -> Nothing
+
+interpret :: String -> IO BFMemory
+interpret program = step (startProgram $ toInstructions program) (BFMemory [] (makeCell 0) [])
+
+step :: BFProgram -> BFMemory -> IO BFMemory
+step (BFProgram _ Stop []) memory = return memory
+step program@(BFProgram _ instruction _) memory@(BFMemory _ currentMemory _) = case instruction of
+    MemoryRight -> step (advance program) (moveMemoryRight memory)
+    MemoryLeft  -> step (advance program) (moveMemoryLeft memory)
+    Increment   -> step (advance program) (onCurrentCell incrementCell memory)
+    Decrement   -> step (advance program) (onCurrentCell decrementCell memory)
+    Output      -> do
+        putChar . chr . getCell $ currentMemory
+        hFlush stdout
+        step (advance program) memory
+    Input       -> do
+        newCurrentChar <- getChar
+        let newCurrent = makeCell . ord $ newCurrentChar
+        step (advance program) (setCurrentCell newCurrent memory)
+    LoopBegin   -> case getCell currentMemory of
+        0   -> step (jumpAfterMatchingLoopEnd program) memory
+        _   -> step (advance program) memory
+    LoopEnd     -> case getCell currentMemory of
+        0   -> step (advance program) memory
+        _   -> step (jumpToMatchingLoopBegin program) memory

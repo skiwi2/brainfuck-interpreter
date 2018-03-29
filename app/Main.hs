@@ -15,7 +15,6 @@ main = do
 
 interpret' :: String -> IO ()
 interpret' program = do
-    result <- interpret program
-    case result of
-        Left err    -> putStrLn ("Error: " ++ err)
-        Right _     -> return ()
+    memory <- interpret program
+    putChar '\n'
+    putStrLn ("Memory: " ++ show memory)
