@@ -2,3 +2,4 @@
 .vscode/
 brainfuck-interpreter.cabal
 *~
+*.EXE.prof

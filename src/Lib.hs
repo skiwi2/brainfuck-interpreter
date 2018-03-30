@@ -16,10 +16,10 @@ startProgram :: [BFInstruction] -> BFProgram
 startProgram instructions = BFProgram [] (head instructions) (tail instructions ++ [Stop])
 
 advance :: BFProgram -> BFProgram
-advance (BFProgram past current next) = BFProgram (past ++ [current]) (head next) (tail next)
+advance (BFProgram past current next) = BFProgram (current:past) (head next) (tail next)
 
 decrease :: BFProgram -> BFProgram
-decrease (BFProgram past current next) = BFProgram (init past) (last past) (current:next)
+decrease (BFProgram past current next) = BFProgram (tail past) (head past) (current:next)
 
 jumpAfterMatchingLoopEnd :: BFProgram -> BFProgram
 jumpAfterMatchingLoopEnd program = jumpAfterMatchingLoopEnd' 0 (advance program)
@@ -57,12 +57,12 @@ wrap :: Int -> Int
 wrap input = mod input 256
 
 moveMemoryRight :: BFMemory -> BFMemory
-moveMemoryRight (BFMemory previous current []) = BFMemory (previous ++ [current]) (makeCell 0) []
-moveMemoryRight (BFMemory previous current next) = BFMemory (previous ++ [current]) (head next) (tail next)
+moveMemoryRight (BFMemory previous current []) = BFMemory (current:previous) (makeCell 0) []
+moveMemoryRight (BFMemory previous current next) = BFMemory (current:previous) (head next) (tail next)
 
 moveMemoryLeft :: BFMemory -> BFMemory
 moveMemoryLeft (BFMemory [] current next) = BFMemory [] (makeCell 0) (current:next)
-moveMemoryLeft (BFMemory previous current next) = BFMemory (init previous) (last previous) (current:next)
+moveMemoryLeft (BFMemory previous current next) = BFMemory (tail previous) (head previous) (current:next)
 
 onCurrentCell :: (BFMemoryCell -> BFMemoryCell) -> BFMemory -> BFMemory
 onCurrentCell func (BFMemory previous current next) = BFMemory previous (func current) next
