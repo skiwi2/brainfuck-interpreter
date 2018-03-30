@@ -91,21 +91,23 @@ interpret program = step (startProgram $ toInstructions program) (BFMemory [] (m
 step :: BFProgram -> BFMemory -> IO BFMemory
 step (BFProgram _ Stop []) memory = return memory
 step program@(BFProgram _ instruction _) memory@(BFMemory _ currentMemory _) = case instruction of
-    MemoryRight -> step (advance program) (moveMemoryRight memory)
-    MemoryLeft  -> step (advance program) (moveMemoryLeft memory)
-    Increment   -> step (advance program) (onCurrentCell incrementCell memory)
-    Decrement   -> step (advance program) (onCurrentCell decrementCell memory)
+    MemoryRight -> continue (moveMemoryRight memory)
+    MemoryLeft  -> continue (moveMemoryLeft memory)
+    Increment   -> continue (onCurrentCell incrementCell memory)
+    Decrement   -> continue (onCurrentCell decrementCell memory)
     Output      -> do
         putChar . chr . getCell $ currentMemory
         hFlush stdout
-        step (advance program) memory
+        continue memory
     Input       -> do
         newCurrentChar <- getChar
         let newCurrent = makeCell . ord $ newCurrentChar
-        step (advance program) (setCurrentCell newCurrent memory)
+        continue (setCurrentCell newCurrent memory)
     LoopBegin   -> case getCell currentMemory of
         0   -> step (jumpAfterMatchingLoopEnd program) memory
-        _   -> step (advance program) memory
+        _   -> continue memory
     LoopEnd     -> case getCell currentMemory of
-        0   -> step (advance program) memory
+        0   -> continue memory
         _   -> step (jumpToMatchingLoopBegin program) memory
+    where
+        continue = step . advance $ program
